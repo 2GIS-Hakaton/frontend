@@ -17,6 +17,7 @@ const PointsPanel = () => {
     routePOIs,
     isLoadingPOIs,
     routeStats,
+    isGenerating,
   } = useRouteStore();
   const { markers, removeMarker, clearMarkers, map } = useMapStore();
   const [isOpen, setIsOpen] = useState(false);
@@ -26,6 +27,7 @@ const PointsPanel = () => {
   const [poiInsertionInfo, setPOIInsertionInfo] = useState(null);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [categoryLimits, setCategoryLimits] = useState({});
+  const [selectedPointInfo, setSelectedPointInfo] = useState(null);
 
   // Автоматически добавляем POI в маршрут после их загрузки
   useEffect(() => {
@@ -68,6 +70,21 @@ const PointsPanel = () => {
       markers[index].destroy();
       removeMarker(markers[index]);
     }
+  };
+
+  const handlePointClick = (point, index) => {
+    setSelectedPointInfo({
+      ...point,
+      index,
+      label: getPointLabel(index),
+    });
+  };
+
+  const getPointLabel = (index) => {
+    if (selectedPoints.length === 1) return 'A';
+    if (index === 0) return 'A';
+    if (index === selectedPoints.length - 1) return 'B';
+    return index.toString();
   };
 
   const handleDragStart = (e, index) => {
@@ -379,7 +396,7 @@ const PointsPanel = () => {
             <button 
               className={`poi-toggle-btn ${preferences.includePOIs ? 'active' : ''}`}
               onClick={handleTogglePOIs}
-              disabled={isLoadingPOIs || selectedPoints.length < 2}
+              disabled={isLoadingPOIs || selectedPoints.length < 2 || isGenerating}
             >
               <span className="poi-icon">🏛️</span>
               <div className="poi-info">
@@ -407,12 +424,13 @@ const PointsPanel = () => {
           </div>
 
           <div className="points-panel-actions">
-            <p className="points-panel-hint">Перетащите точки для изменения порядка</p>
-            {selectedPoints.length >= 3 && (
+            {!isGenerating && <p className="points-panel-hint">Перетащите точки для изменения порядка</p>}
+            {isGenerating && <p className="points-panel-hint generating">⏳ Генерация маршрута... Редактирование недоступно</p>}
+            {selectedPoints.length >= 3 && !isGenerating && (
               <button
                 className="optimize-route-btn"
                 onClick={handleOptimizeRoute}
-                disabled={isOptimizing}
+                disabled={isOptimizing || isGenerating}
                 title="Найти оптимальный порядок точек для кратчайшего маршрута"
               >
                 {isOptimizing ? '⏳ Оптимизация...' : '🎯 Оптимизировать'}
@@ -422,44 +440,43 @@ const PointsPanel = () => {
           
           <div className="points-panel-list">
             {selectedPoints.map((point, index) => {
-              // Определяем метку точки: A для первой, B для последней, цифры для остальных
-              const getPointLabel = () => {
-                if (selectedPoints.length === 1) return 'A';
-                if (index === 0) return 'A';
-                if (index === selectedPoints.length - 1) return 'B';
-                return index.toString();
-              };
+              const pointLabel = getPointLabel(index);
 
               return (
                 <div
                   key={index}
-                  className={`points-panel-item ${draggedIndex === index ? 'dragging' : ''}`}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, index)}
+                  className={`points-panel-item ${draggedIndex === index ? 'dragging' : ''} ${isGenerating ? 'disabled' : ''}`}
+                  draggable={!isGenerating}
+                  onDragStart={(e) => !isGenerating && handleDragStart(e, index)}
                   onDragEnd={handleDragEnd}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, index)}
+                  onDragOver={(e) => !isGenerating && handleDragOver(e)}
+                  onDrop={(e) => !isGenerating && handleDrop(e, index)}
                 >
-                  <span className="drag-handle" title="Перетащите для изменения порядка">
+                  <span className="drag-handle" title={isGenerating ? 'Недоступно во время генерации' : 'Перетащите для изменения порядка'}>
                     ⋮⋮
                   </span>
-                  <span className="point-number">{getPointLabel()}</span>
-                <div className="point-info">
-                  <span className="point-name">
-                    {point.address || point.name || 'Загрузка адреса...'}
-                  </span>
-                  <span className="point-coords">
-                    {point.lat.toFixed(4)}, {point.lon.toFixed(4)}
-                  </span>
+                  <span className="point-number">{pointLabel}</span>
+                  <div 
+                    className="point-info"
+                    onClick={() => !isGenerating && handlePointClick(point, index)}
+                    style={{ cursor: isGenerating ? 'not-allowed' : 'pointer' }}
+                  >
+                    <span className="point-name">
+                      {point.address || point.name || 'Загрузка адреса...'}
+                    </span>
+                    <span className="point-coords">
+                      {point.lat.toFixed(4)}, {point.lon.toFixed(4)}
+                    </span>
+                  </div>
+                  <button
+                    className="point-remove-btn"
+                    onClick={() => handleRemovePoint(index)}
+                    disabled={isGenerating}
+                    title={isGenerating ? 'Недоступно во время генерации' : 'Удалить точку'}
+                  >
+                    ✕
+                  </button>
                 </div>
-                <button
-                  className="point-remove-btn"
-                  onClick={() => handleRemovePoint(index)}
-                  title="Удалить точку"
-                >
-                  ✕
-                </button>
-              </div>
               );
             })}
           </div>
@@ -468,6 +485,68 @@ const PointsPanel = () => {
 
       {/* Overlay for mobile */}
       {isOpen && <div className="points-panel-overlay" onClick={() => setIsOpen(false)} />}
+
+      {/* Информационный бабл для точки */}
+      {selectedPointInfo && (
+        <div className="point-info-overlay" onClick={() => setSelectedPointInfo(null)}>
+          <div className="point-info-bubble" onClick={(e) => e.stopPropagation()}>
+            <div className="bubble-header">
+              <div className="bubble-label">{selectedPointInfo.label}</div>
+              <button className="bubble-close" onClick={() => setSelectedPointInfo(null)}>✕</button>
+            </div>
+            
+            <div className="bubble-content">
+              <div className="bubble-section">
+                <h3 className="bubble-title">
+                  {selectedPointInfo.isPOI && <span className="poi-badge">🏛️ Достопримечательность</span>}
+                  {selectedPointInfo.address || selectedPointInfo.name || 'Точка на карте'}
+                </h3>
+              </div>
+
+              {selectedPointInfo.name && selectedPointInfo.address && selectedPointInfo.name !== selectedPointInfo.address && (
+                <div className="bubble-section">
+                  <label className="bubble-label-text">Название:</label>
+                  <p className="bubble-text selectable">{selectedPointInfo.name}</p>
+                </div>
+              )}
+
+              <div className="bubble-section">
+                <label className="bubble-label-text">Координаты:</label>
+                <p className="bubble-text selectable">
+                  {selectedPointInfo.lat.toFixed(6)}, {selectedPointInfo.lon.toFixed(6)}
+                </p>
+              </div>
+
+              {selectedPointInfo.category && (
+                <div className="bubble-section">
+                  <label className="bubble-label-text">Категория:</label>
+                  <p className="bubble-text">{selectedPointInfo.category}</p>
+                </div>
+              )}
+
+              {selectedPointInfo.description && selectedPointInfo.description !== selectedPointInfo.address && (
+                <div className="bubble-section">
+                  <label className="bubble-label-text">Описание:</label>
+                  <p className="bubble-text selectable">{selectedPointInfo.description}</p>
+                </div>
+              )}
+
+              <div className="bubble-section">
+                <label className="bubble-label-text">Позиция в маршруте:</label>
+                <p className="bubble-text">
+                  {selectedPointInfo.index === 0 && 'Начальная точка'}
+                  {selectedPointInfo.index === selectedPoints.length - 1 && selectedPointInfo.index !== 0 && 'Конечная точка'}
+                  {selectedPointInfo.index !== 0 && selectedPointInfo.index !== selectedPoints.length - 1 && `Промежуточная точка ${selectedPointInfo.index}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="bubble-footer">
+              <p className="bubble-hint">💡 Нажмите вне окна, чтобы закрыть</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Селектор категорий достопримечательностей */}
       {showCategorySelector && (

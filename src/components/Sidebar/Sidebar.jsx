@@ -33,6 +33,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
 
   const { clearMarkers, directions } = useMapStore();
   const [narrativeStyle, setNarrativeStyle] = useState('casual');
+  const [pollingTimeoutId, setPollingTimeoutId] = useState(null);
 
   // Загрузка достопримечательностей при изменении точек маршрута
   useEffect(() => {
@@ -188,6 +189,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
     if (attempts >= maxAttempts) {
       setError('Превышено время ожидания генерации аудио');
       setIsGenerating(false);
+      setPollingTimeoutId(null);
       return;
     }
 
@@ -197,17 +199,38 @@ const Sidebar = ({ isOpen, onToggle }) => {
       if (status.ready) {
         setAudioUrl(getRouteAudioUrl(routeId));
         setIsGenerating(false);
+        setPollingTimeoutId(null);
       } else {
         // Wait 5 seconds and try again
-        setTimeout(() => pollForAudio(routeId, attempts + 1), 5000);
+        const timeoutId = setTimeout(() => pollForAudio(routeId, attempts + 1), 5000);
+        setPollingTimeoutId(timeoutId);
       }
     } catch (err) {
       console.error('Error checking audio status:', err);
-      setTimeout(() => pollForAudio(routeId, attempts + 1), 5000);
+      const timeoutId = setTimeout(() => pollForAudio(routeId, attempts + 1), 5000);
+      setPollingTimeoutId(timeoutId);
     }
   };
 
+  const handleCancelGeneration = () => {
+    // Отменяем polling
+    if (pollingTimeoutId) {
+      clearTimeout(pollingTimeoutId);
+      setPollingTimeoutId(null);
+    }
+    
+    // Сбрасываем состояние генерации
+    setIsGenerating(false);
+    setError('Генерация отменена');
+  };
+
   const handleClearRoute = () => {
+    // Если идет генерация, отменяем её
+    if (isGenerating) {
+      handleCancelGeneration();
+      return;
+    }
+
     clearSelectedPoints();
     clearMarkers();
     setCurrentRoute(null);
@@ -345,15 +368,14 @@ const Sidebar = ({ isOpen, onToggle }) => {
                 onClick={handleGenerateRoute}
                 disabled={isGenerating || selectedPoints.length === 0}
               >
-                {isGenerating ? 'Генерация...' : 'Построить маршрут'}
+                {isGenerating ? '⏳ Генерация...' : 'Построить маршрут'}
               </button>
 
               <button
-                className="btn btn-secondary"
+                className={`btn ${isGenerating ? 'btn-danger' : 'btn-secondary'}`}
                 onClick={handleClearRoute}
-                disabled={isGenerating}
               >
-                Очистить
+                {isGenerating ? '⏹️ Отменить генерацию' : 'Очистить'}
               </button>
             </div>
 
