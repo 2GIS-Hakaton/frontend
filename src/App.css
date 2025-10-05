@@ -1,0 +1,44 @@
+.app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: margin-left var(--transition-base);
+}
+
+.main-content.sidebar-closed {
+  margin-left: 0;
+}
+
+.audio-player-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: var(--color-background);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .app {
+    flex-direction: column;
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+  }
+  
+  .audio-player-container {
+    bottom: 0;
+  }
+}
