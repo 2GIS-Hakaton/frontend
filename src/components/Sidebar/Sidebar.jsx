@@ -155,7 +155,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
   // Получить адрес по координатам через 2GIS API
   const getAddressFromCoordinates = async (lat, lon) => {
     try {
-      const apiKey = "ae73fc4c-e332-4564-81c8-ede0a597947e";
+      const apiKey = "89ebb4c5-891d-4609-9e53-66383a3cbdbc";
       const response = await fetch(
         `https://catalog.api.2gis.com/3.0/items/geocode?lat=${lat}&lon=${lon}&fields=items.point,items.address&key=${apiKey}`
       );
