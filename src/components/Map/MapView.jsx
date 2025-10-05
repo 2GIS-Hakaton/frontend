@@ -6,7 +6,7 @@ import './MapView.css';
 const MapView = () => {
   const mapContainerRef = useRef(null);
   const { map, directions, setMap, setDirections, clearMarkers, addMarker, markers } = useMapStore();
-  const { selectedPoints, addSelectedPoint, currentRoute, preferences } = useRouteStore();
+  const { selectedPoints, addSelectedPoint, currentRoute, preferences, audioUrl } = useRouteStore();
 
   // Initialize map
   useEffect(() => {
@@ -42,8 +42,29 @@ const MapView = () => {
       const coords = e.lngLat;
       
       // Проверяем лимит точек из preferences
-      const { selectedPoints, preferences } = useRouteStore.getState();
+      const { selectedPoints, preferences, removeSelectedPoint } = useRouteStore.getState();
       const maxPoints = preferences.maxWaypoints || 10;
+      
+      // Проверяем, есть ли уже точка рядом с местом клика (в радиусе ~50 метров)
+      const clickThreshold = 0.0005; // примерно 50 метров
+      const existingPointIndex = selectedPoints.findIndex(point => {
+        const latDiff = Math.abs(point.lat - coords[1]);
+        const lonDiff = Math.abs(point.lon - coords[0]);
+        return latDiff < clickThreshold && lonDiff < clickThreshold;
+      });
+      
+      if (existingPointIndex !== -1) {
+        // Точка уже существует - удаляем её
+        removeSelectedPoint(existingPointIndex);
+        
+        // Удаляем соответствующий маркер
+        const { markers, removeMarker } = useMapStore.getState();
+        if (markers[existingPointIndex]) {
+          markers[existingPointIndex].destroy();
+          removeMarker(markers[existingPointIndex]);
+        }
+        return;
+      }
       
       if (selectedPoints.length >= maxPoints) {
         alert(`Достигнут лимит точек (${maxPoints}). Измените "Максимум точек" в настройках или очистите маршрут.`);
@@ -75,6 +96,9 @@ const MapView = () => {
   useEffect(() => {
     if (!map || !directions) return;
 
+    // Очищаем предыдущий маршрут
+    directions.clear();
+
     if (selectedPoints.length >= 2) {
       // Convert points to [lon, lat] format
       const points = selectedPoints.map(p => [p.lon, p.lat]);
@@ -83,8 +107,8 @@ const MapView = () => {
       directions.pedestrianRoute({
         points: points,
       });
-
-      // Remove temporary markers after route is drawn
+    } else if (selectedPoints.length === 0) {
+      // Если точек нет, очищаем маркеры
       markers.forEach((m) => {
         if (m && m.destroy) {
           m.destroy();
@@ -150,12 +174,15 @@ const MapView = () => {
   }, [currentRoute, map, directions]);
 
   return (
-    <div className="map-view">
+    <div className={`map-view ${audioUrl ? 'audio-player-visible' : ''}`}>
       <div ref={mapContainerRef} className="map-container" />
       
       {selectedPoints.length > 0 && (
         <div className="map-info">
-          <p>Выбрано точек: {selectedPoints.length}</p>
+          <p>
+            <span className="map-info-icon">📍</span>
+            Точек: {selectedPoints.length}
+          </p>
         </div>
       )}
     </div>

@@ -45,6 +45,14 @@ export const useRouteStore = create((set, get) => ({
     set({ selectedPoints: selectedPoints.filter((_, i) => i !== index) });
   },
   
+  reorderSelectedPoints: (fromIndex, toIndex) => {
+    const { selectedPoints } = get();
+    const newPoints = [...selectedPoints];
+    const [movedPoint] = newPoints.splice(fromIndex, 1);
+    newPoints.splice(toIndex, 0, movedPoint);
+    set({ selectedPoints: newPoints });
+  },
+  
   clearSelectedPoints: () => set({ selectedPoints: [] }),
   
   setPreferences: (preferences) => {
