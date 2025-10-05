@@ -3,7 +3,7 @@ import { useRouteStore } from '../../store/routeStore';
 import { useMapStore } from '../../store/mapStore';
 import { optimizeRouteAdvanced } from '../../utils/routeOptimizer';
 import { formatDistance } from '../../utils/formatters';
-import { insertPOIsIntoRoute, canAddPOI, calculateRequiredSlots } from '../../utils/poiInsertion';
+import { canAddPOI, calculateRequiredSlots } from '../../utils/poiInsertion';
 import { POI_CATEGORIES } from '../../enums/POICategories';
 import './PointsPanel.css';
 
@@ -15,6 +15,7 @@ const PointsPanel = () => {
     preferences,
     setPreferences,
     routePOIs,
+    setRoutePOIs,
     isLoadingPOIs,
     routeStats,
     isGenerating,
@@ -26,42 +27,22 @@ const PointsPanel = () => {
   const [showPOIDialog, setShowPOIDialog] = useState(false);
   const [poiInsertionInfo, setPOIInsertionInfo] = useState(null);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
-  const [categoryLimits, setCategoryLimits] = useState({});
   const [selectedPointInfo, setSelectedPointInfo] = useState(null);
+  const [allFoundPOIs, setAllFoundPOIs] = useState([]);
 
-  // Автоматически добавляем POI в маршрут после их загрузки
+  // Сохраняем все найденные POI при их загрузке
   useEffect(() => {
-    if (preferences.includePOIs && !isLoadingPOIs && routePOIs.length > 0) {
-      // Проверяем, не добавлены ли уже POI в маршрут
-      const hasPOIsInRoute = selectedPoints.some(point => point.isPOI);
-      
-      if (!hasPOIsInRoute) {
-        const availableSlots = preferences.maxWaypoints - selectedPoints.length;
-        
-        if (availableSlots === 0) {
-          // Нет свободных слотов
-          const requiredSlots = calculateRequiredSlots(selectedPoints.length, 1);
-          setPOIInsertionInfo({
-            type: 'no-slots',
-            requiredSlots,
-            currentMax: preferences.maxWaypoints,
-          });
-          setShowPOIDialog(true);
-        } else if (availableSlots < routePOIs.length) {
-          // Есть слоты, но не для всех
-          setPOIInsertionInfo({
-            type: 'partial',
-            availableSlots,
-            totalPOIs: routePOIs.length,
-          });
-          setShowPOIDialog(true);
-        } else {
-          // Достаточно слотов - добавляем все
-          addPOIsToRoute(routePOIs);
-        }
-      }
+    if (!isLoadingPOIs && routePOIs.length > 0 && allFoundPOIs.length === 0) {
+      setAllFoundPOIs(routePOIs);
     }
-  }, [routePOIs, isLoadingPOIs, preferences.includePOIs]);
+  }, [routePOIs, isLoadingPOIs, allFoundPOIs.length]);
+
+  // Сбрасываем найденные POI при выключении
+  useEffect(() => {
+    if (!preferences.includePOIs) {
+      setAllFoundPOIs([]);
+    }
+  }, [preferences.includePOIs]);
 
   const handleRemovePoint = (index) => {
     removeSelectedPoint(index);
@@ -69,6 +50,48 @@ const PointsPanel = () => {
     if (markers[index]) {
       markers[index].destroy();
       removeMarker(markers[index]);
+    }
+  };
+
+  const handleTogglePOI = (poi) => {
+    if (isGenerating) return;
+
+    const existingIndex = selectedPoints.findIndex(
+      point => point.lat === poi.lat && point.lon === poi.lon
+    );
+
+    if (existingIndex !== -1) {
+      // POI уже добавлена - удаляем
+      removeSelectedPoint(existingIndex);
+      if (markers[existingIndex]) {
+        markers[existingIndex].destroy();
+        removeMarker(markers[existingIndex]);
+      }
+    } else {
+      // Добавляем POI как обычную точку на карту
+      const newPoint = {
+        lat: poi.lat,
+        lon: poi.lon,
+        name: poi.name,
+        address: poi.name,
+        description: poi.description,
+        category: poi.category,
+        isPOI: true,
+        rubricId: poi.rubricId,
+      };
+
+      useRouteStore.setState({ 
+        selectedPoints: [...selectedPoints, newPoint] 
+      });
+
+      // Добавляем маркер на карту
+      if (map) {
+        const marker = new window.mapgl.Marker(map, {
+          coordinates: [poi.lon, poi.lat],
+          icon: 'https://docs.2gis.com/img/dotMarker.svg',
+        });
+        useMapStore.getState().addMarker(marker);
+      }
     }
   };
 
@@ -167,41 +190,6 @@ const PointsPanel = () => {
       : [...currentCategories, categoryValue];
     
     setPreferences({ poiCategories: newCategories });
-    
-    // Инициализируем лимит для новой категории
-    if (!currentCategories.includes(categoryValue) && !categoryLimits[categoryValue]) {
-      setCategoryLimits(prev => ({ ...prev, [categoryValue]: 1 }));
-    }
-  };
-
-  const handleCategoryLimitChange = (categoryValue, delta) => {
-    setCategoryLimits(prev => ({
-      ...prev,
-      [categoryValue]: Math.max(0, (prev[categoryValue] || 1) + delta)
-    }));
-  };
-
-  const handleSetMaxPOIs = () => {
-    const availableSlots = preferences.maxWaypoints - selectedPoints.length;
-    const selectedCategories = preferences.poiCategories || [];
-    
-    if (selectedCategories.length === 0) {
-      // Если категории не выбраны, устанавливаем максимум для всех
-      const perCategory = Math.floor(availableSlots / POI_CATEGORIES.length);
-      const newLimits = {};
-      POI_CATEGORIES.forEach(cat => {
-        newLimits[cat.value] = perCategory;
-      });
-      setCategoryLimits(newLimits);
-    } else {
-      // Распределяем доступные слоты между выбранными категориями
-      const perCategory = Math.floor(availableSlots / selectedCategories.length);
-      const newLimits = { ...categoryLimits };
-      selectedCategories.forEach(catValue => {
-        newLimits[catValue] = perCategory;
-      });
-      setCategoryLimits(newLimits);
-    }
   };
 
   const handleTogglePOIs = () => {
@@ -225,110 +213,40 @@ const PointsPanel = () => {
   };
 
   const handleConfirmCategories = () => {
-    // Вычисляем общее количество запрошенных POI
-    const selectedCategories = preferences.poiCategories || [];
-    const categoriesToUse = selectedCategories.length > 0 ? selectedCategories : POI_CATEGORIES.map(c => c.value);
-    
-    const totalRequested = categoriesToUse.reduce((sum, catValue) => {
-      return sum + (categoryLimits[catValue] || 1);
-    }, 0);
-    
-    const availableSlots = preferences.maxWaypoints - selectedPoints.length;
-    
-    // Если запрошено больше, чем максимум - автоматически увеличиваем лимит
-    if (totalRequested > availableSlots) {
-      const newMaxWaypoints = selectedPoints.length + totalRequested;
-      setPreferences({ 
-        includePOIs: true,
-        maxWaypoints: newMaxWaypoints 
-      });
-    } else {
-      setPreferences({ includePOIs: true });
-    }
+    // Просто подтверждаем выбор категорий
+    setPreferences({ includePOIs: true });
     
     // Закрываем селектор
     setShowCategorySelector(false);
   };
 
-  const addPOIsToRoute = (poisToAdd) => {
-    // Фильтруем POI по лимитам категорий
-    const selectedCategories = preferences.poiCategories || [];
-    const categoriesToUse = selectedCategories.length > 0 ? selectedCategories : POI_CATEGORIES.map(c => c.value);
-    
-    const filteredPOIs = [];
-    const categoryCount = {};
-    
-    // Группируем POI по категориям и применяем лимиты
-    poisToAdd.forEach(poi => {
-      const category = POI_CATEGORIES.find(c => c.id === poi.rubricId);
-      if (!category) return;
-      
-      const catValue = category.value;
-      if (!categoriesToUse.includes(catValue)) return;
-      
-      const limit = categoryLimits[catValue] || 1;
-      const currentCount = categoryCount[catValue] || 0;
-      
-      if (currentCount < limit) {
-        filteredPOIs.push(poi);
-        categoryCount[catValue] = currentCount + 1;
-      }
-    });
-    
-    const { newRoute, addedCount } = insertPOIsIntoRoute(
-      selectedPoints,
-      filteredPOIs,
-      preferences.maxWaypoints
-    );
-    
-    if (addedCount > 0) {
-      // Обновляем точки в store
-      useRouteStore.setState({ selectedPoints: newRoute });
-      
-      // Добавляем маркеры для новых POI
-      clearMarkers();
-      newRoute.forEach((point) => {
-        if (map) {
-          const marker = new window.mapgl.Marker(map, {
-            coordinates: [point.lon, point.lat],
-            icon: point.isPOI 
-              ? 'https://docs.2gis.com/img/dotMarker.svg' 
-              : 'https://docs.2gis.com/img/dotMarker.svg',
-          });
-          useMapStore.getState().addMarker(marker);
-        }
-      });
-    }
-  };
-
   const removePOIsFromRoute = () => {
-    // Удаляем все точки, помеченные как POI
-    const filteredPoints = selectedPoints.filter(point => !point.isPOI);
-    useRouteStore.setState({ selectedPoints: filteredPoints });
+    // Удаляем все POI из selectedPoints и с карты
+    const poisToRemove = selectedPoints
+      .map((point, index) => ({ point, index }))
+      .filter(({ point }) => point.isPOI);
     
-    // Обновляем маркеры
-    clearMarkers();
-    filteredPoints.forEach((point) => {
-      if (map) {
-        const marker = new window.mapgl.Marker(map, {
-          coordinates: [point.lon, point.lat],
-          icon: 'https://docs.2gis.com/img/dotMarker.svg',
-        });
-        useMapStore.getState().addMarker(marker);
+    poisToRemove.reverse().forEach(({ index }) => {
+      if (markers[index]) {
+        markers[index].destroy();
+        removeMarker(markers[index]);
       }
+      removeSelectedPoint(index);
     });
+    
+    // Очищаем список найденных POI
+    setAllFoundPOIs([]);
+    setRoutePOIs([]);
   };
 
   const handleConfirmPOIInsertion = () => {
     if (poiInsertionInfo?.type === 'no-slots') {
-      // Увеличиваем лимит и добавляем одну достопримечательность
+      // Увеличиваем лимит
       const newMax = poiInsertionInfo.requiredSlots;
       setPreferences({ maxWaypoints: newMax, includePOIs: true });
-      addPOIsToRoute([routePOIs[0]]);
     } else if (poiInsertionInfo?.type === 'partial') {
-      // Добавляем столько, сколько помещается
+      // Просто подтверждаем
       setPreferences({ includePOIs: true });
-      addPOIsToRoute(routePOIs);
     }
     
     setShowPOIDialog(false);
@@ -480,6 +398,44 @@ const PointsPanel = () => {
               );
             })}
           </div>
+
+          {/* Список найденных POI для добавления на карту */}
+          {allFoundPOIs && allFoundPOIs.length > 0 && (
+            <div className="pois-section">
+              <h3 className="pois-section-title">
+                🏛️ Найденные достопримечательности ({allFoundPOIs.length})
+              </h3>
+              <p className="pois-section-hint">Выберите достопримечательности для добавления на карту</p>
+              <div className="pois-list">
+                {allFoundPOIs.map((poi, index) => {
+                  const isSelected = selectedPoints.some(
+                    point => point.lat === poi.lat && point.lon === poi.lon
+                  );
+                  return (
+                    <div 
+                      key={index} 
+                      className={`poi-item ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleTogglePOI(poi)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleTogglePOI(poi)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="poi-checkbox"
+                      />
+                      <span className="poi-icon">📍</span>
+                      <div className="poi-details">
+                        <span className="poi-name">{poi.name}</span>
+                        <span className="poi-category">{poi.category}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -558,15 +514,11 @@ const PointsPanel = () => {
             </div>
             <div className="poi-dialog-content">
               <div className="category-header">
-                <p className="category-hint">Выберите категории и укажите количество:</p>
-                <button className="max-pois-btn" onClick={handleSetMaxPOIs}>
-                  📊 Максимум
-                </button>
+                <p className="category-hint">Выберите категории достопримечательностей для поиска:</p>
               </div>
               <div className="category-list">
                 {POI_CATEGORIES.map(category => {
                   const isSelected = preferences.poiCategories?.includes(category.value) || false;
-                  const limit = categoryLimits[category.value] || 1;
                   
                   return (
                     <div key={category.value} className={`category-item ${isSelected ? 'selected' : ''}`}>
@@ -582,54 +534,18 @@ const PointsPanel = () => {
                           <span className="category-description">{category.description}</span>
                         </div>
                       </label>
-                      
-                      {(isSelected || preferences.poiCategories?.length === 0) && (
-                        <div className="category-counter">
-                          <button 
-                            className="counter-btn"
-                            onClick={() => handleCategoryLimitChange(category.value, -1)}
-                            disabled={limit <= 0}
-                          >
-                            −
-                          </button>
-                          <span className="counter-value">{limit}</span>
-                          <button 
-                            className="counter-btn"
-                            onClick={() => handleCategoryLimitChange(category.value, 1)}
-                          >
-                            +
-                          </button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
               
-              {(() => {
-                const selectedCategories = preferences.poiCategories || [];
-                const categoriesToUse = selectedCategories.length > 0 ? selectedCategories : POI_CATEGORIES.map(c => c.value);
-                const totalRequested = categoriesToUse.reduce((sum, catValue) => sum + (categoryLimits[catValue] || 1), 0);
-                const availableSlots = preferences.maxWaypoints - selectedPoints.length;
-                
-                return (
-                  <div className="category-summary">
-                    <p className="summary-text">
-                      Запрошено: <strong>{totalRequested}</strong> достопримечательностей
-                    </p>
-                    {totalRequested > availableSlots && (
-                      <p className="summary-warning">
-                        ⚠️ Лимит точек будет автоматически увеличен с {preferences.maxWaypoints} до {selectedPoints.length + totalRequested}
-                      </p>
-                    )}
-                    {preferences.poiCategories?.length === 0 && (
-                      <p className="category-warning">
-                        ℹ️ Категории не выбраны - будут искаться все типы достопримечательностей
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
+              {preferences.poiCategories?.length === 0 && (
+                <div className="category-summary">
+                  <p className="category-warning">
+                    ℹ️ Категории не выбраны - будут искаться все типы достопримечательностей
+                  </p>
+                </div>
+              )}
             </div>
             <div className="poi-dialog-actions">
               <button className="poi-dialog-btn poi-dialog-btn-cancel" onClick={() => setShowCategorySelector(false)}>
