@@ -85,20 +85,29 @@ const PointsPanel = () => {
           <p className="points-panel-hint">Перетащите точки для изменения порядка</p>
           
           <div className="points-panel-list">
-            {selectedPoints.map((point, index) => (
-              <div
-                key={index}
-                className={`points-panel-item ${draggedIndex === index ? 'dragging' : ''}`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-              >
-                <span className="drag-handle" title="Перетащите для изменения порядка">
-                  ⋮⋮
-                </span>
-                <span className="point-number">{index + 1}</span>
+            {selectedPoints.map((point, index) => {
+              // Определяем метку точки: A для первой, B для последней, цифры для остальных
+              const getPointLabel = () => {
+                if (selectedPoints.length === 1) return 'A';
+                if (index === 0) return 'A';
+                if (index === selectedPoints.length - 1) return 'B';
+                return index.toString();
+              };
+
+              return (
+                <div
+                  key={index}
+                  className={`points-panel-item ${draggedIndex === index ? 'dragging' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, index)}
+                >
+                  <span className="drag-handle" title="Перетащите для изменения порядка">
+                    ⋮⋮
+                  </span>
+                  <span className="point-number">{getPointLabel()}</span>
                 <div className="point-info">
                   <span className="point-name">
                     {point.address || point.name || 'Загрузка адреса...'}
@@ -115,7 +124,8 @@ const PointsPanel = () => {
                   ✕
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

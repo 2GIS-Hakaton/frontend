@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useRouteStore } from '../../store/routeStore';
 import { useMapStore } from '../../store/mapStore';
 import { generateRoute, getRouteAudioUrl, checkRouteAudioStatus } from '../../api/routes';
+import AddressSearch from '../AddressSearch/AddressSearch';
 import './Sidebar.css';
 import { NARRATIVE_STYLES } from '../../enums/Narrative_styles';
 import { EPOCHS } from '../../enums/Epochs';
@@ -177,6 +178,11 @@ const Sidebar = ({ isOpen, onToggle }) => {
 
         {isOpen && (
           <div className="sidebar-content">
+            <section className="sidebar-section">
+              <h2 className="section-title">Поиск адреса</h2>
+              <AddressSearch />
+            </section>
+
             <section className="sidebar-section">
               <h2 className="section-title">Параметры маршрута</h2>
 
