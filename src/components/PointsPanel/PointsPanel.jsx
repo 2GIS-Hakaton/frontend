@@ -100,6 +100,9 @@ const PointsPanel = () => {
                 </span>
                 <span className="point-number">{index + 1}</span>
                 <div className="point-info">
+                  <span className="point-name">
+                    {point.address || point.name || 'Загрузка адреса...'}
+                  </span>
                   <span className="point-coords">
                     {point.lat.toFixed(4)}, {point.lon.toFixed(4)}
                   </span>

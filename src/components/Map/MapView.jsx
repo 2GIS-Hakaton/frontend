@@ -12,8 +12,8 @@ const MapView = () => {
   useEffect(() => {
     if (!mapContainerRef.current || map) return;
 
-    const mapglApiKey = '8561492e-8262-40c5-85e7-a58c1c705168';
-    const directionsApiKey = '8561492e-8262-40c5-85e7-a58c1c705168';
+    const mapglApiKey = 'ae73fc4c-e332-4564-81c8-ede0a597947e';
+    const directionsApiKey = 'ae73fc4c-e332-4564-81c8-ede0a597947e';
 
     if (!mapglApiKey) {
       console.error('2GIS MapGL API key is not set');
@@ -37,8 +37,44 @@ const MapView = () => {
       setDirections(directionsInstance);
     }
 
+    // Функция для получения адреса по координатам
+    const getAddressFromCoordinates = async (lat, lon) => {
+      try {
+        const apiKey = '8561492e-8262-40c5-85e7-a58c1c705168';
+        const response = await fetch(
+          `https://catalog.api.2gis.com/3.0/items/geocode?lat=${lat}&lon=${lon}&fields=items.point,items.address&key=${apiKey}`
+        );
+        const data = await response.json();
+
+        if (data.result?.items?.length > 0) {
+          const item = data.result.items[0];
+          const address = item.address_name || item.full_name || '';
+          const name = item.name || '';
+          
+          // Формируем читаемый адрес
+          let displayAddress = address;
+          if (name && name !== address) {
+            displayAddress = name;
+          }
+          
+          return {
+            name: displayAddress || `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+            address: address || `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+          };
+        }
+      } catch (error) {
+        console.error('Reverse geocoding error:', error);
+      }
+      
+      // Fallback - просто координаты
+      return {
+        name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+        address: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+      };
+    };
+
     // Add click handler for selecting points
-    mapInstance.on('click', (e) => {
+    mapInstance.on('click', async (e) => {
       const coords = e.lngLat;
       
       // Проверяем лимит точек из preferences
@@ -78,9 +114,15 @@ const MapView = () => {
       });
       
       addMarker(marker);
+      
+      // Получаем адрес для точки
+      const addressInfo = await getAddressFromCoordinates(coords[1], coords[0]);
+      
       addSelectedPoint({
         lat: coords[1],
         lon: coords[0],
+        name: addressInfo.name,
+        address: addressInfo.address,
       });
     });
 
