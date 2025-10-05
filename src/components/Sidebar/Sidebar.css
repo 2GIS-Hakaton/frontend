@@ -6,7 +6,7 @@
   width: 48px;
   height: 48px;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
   border: none;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
@@ -53,7 +53,7 @@
   padding: var(--spacing-lg);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
 }
 
 .sidebar-title {
@@ -64,7 +64,7 @@
 
 .toggle-btn {
   background: rgba(255, 255, 255, 0.2);
-  color: white;
+  color: var(--color-background);
   border: none;
   width: 32px;
   height: 32px;
@@ -174,7 +174,7 @@
 
 .btn-primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -200,7 +200,7 @@
 
 .error-message {
   padding: var(--spacing-md);
-  background: #ffebee;
+  background: var(--color-error-light);
   color: var(--color-error);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -244,7 +244,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-overlay);
     z-index: 999;
   }
 

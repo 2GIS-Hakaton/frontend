@@ -6,7 +6,10 @@ import PointsPanel from './components/PointsPanel/PointsPanel';
 import { useRouteStore } from './store/routeStore';
 import './App.css';
 
+import { useTheme } from './hooks/useTheme';
+
 function App() {
+  useTheme();
   const { currentRoute, audioUrl } = useRouteStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
