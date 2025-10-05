@@ -4,7 +4,8 @@ import { useMapStore } from '../../store/mapStore';
 import { optimizeRouteAdvanced } from '../../utils/routeOptimizer';
 import { formatDistance } from '../../utils/formatters';
 import { canAddPOI, calculateRequiredSlots } from '../../utils/poiInsertion';
-import { POI_CATEGORIES } from '../../enums/POICategories';
+import { POI_CATEGORIES, getSelectedRubricIds } from '../../enums/POICategories';
+import { findPOIsAlongRoute } from '../../utils/poisSearch';
 import './PointsPanel.css';
 
 const PointsPanel = () => {
@@ -212,12 +213,27 @@ const PointsPanel = () => {
     }
   };
 
-  const handleConfirmCategories = () => {
-    // Просто подтверждаем выбор категорий
+  const handleConfirmCategories = async () => {
+    // Подтверждаем выбор категорий
     setPreferences({ includePOIs: true });
     
     // Закрываем селектор
     setShowCategorySelector(false);
+    
+    // Загружаем POI по выбранным категориям
+    if (selectedPoints.length >= 2) {
+      useRouteStore.getState().setIsLoadingPOIs(true);
+      try {
+        const rubricIds = getSelectedRubricIds(preferences.poiCategories);
+        const pois = await findPOIsAlongRoute(selectedPoints, 500, rubricIds);
+        useRouteStore.getState().setRoutePOIs(pois);
+      } catch (error) {
+        console.error('Error loading POIs:', error);
+        useRouteStore.getState().setRoutePOIs([]);
+      } finally {
+        useRouteStore.getState().setIsLoadingPOIs(false);
+      }
+    }
   };
 
   const removePOIsFromRoute = () => {
@@ -402,9 +418,19 @@ const PointsPanel = () => {
           {/* Список найденных POI для добавления на карту */}
           {allFoundPOIs && allFoundPOIs.length > 0 && (
             <div className="pois-section">
-              <h3 className="pois-section-title">
-                🏛️ Найденные достопримечательности ({allFoundPOIs.length})
-              </h3>
+              <div className="pois-section-header">
+                <h3 className="pois-section-title">
+                  🏛️ Найденные достопримечательности ({allFoundPOIs.length})
+                </h3>
+                <button
+                  className="refresh-pois-btn"
+                  onClick={handleConfirmCategories}
+                  disabled={isLoadingPOIs || isGenerating}
+                  title="Обновить список достопримечательностей"
+                >
+                  {isLoadingPOIs ? '⏳' : '🔄'}
+                </button>
+              </div>
               <p className="pois-section-hint">Выберите достопримечательности для добавления на карту</p>
               <div className="pois-list">
                 {allFoundPOIs.map((poi, index) => {

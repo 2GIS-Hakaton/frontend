@@ -3,9 +3,9 @@ import { useRouteStore } from '../../store/routeStore';
 import { useMapStore } from '../../store/mapStore';
 import { generateRoute, getRouteAudioUrl, checkRouteAudioStatus } from '../../api/routes';
 import AddressSearch from '../AddressSearch/AddressSearch';
-import { findPOIsAlongRoute, calculateRouteDistance, estimateRouteTime } from '../../utils/poisSearch';
+import { calculateRouteDistance, estimateRouteTime } from '../../utils/poisSearch';
 import { formatDistance } from '../../utils/formatters';
-import { getSelectedRubricIds, getCategoriesForAPI } from '../../enums/POICategories';
+import { getCategoriesForAPI } from '../../enums/POICategories';
 import './Sidebar.css';
 import { NARRATIVE_STYLES } from '../../enums/Narrative_styles';
 import { EPOCHS } from '../../enums/Epochs';
@@ -38,40 +38,18 @@ const Sidebar = ({ isOpen, onToggle }) => {
   const [estimatedTime, setEstimatedTime] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
 
-  // Загрузка достопримечательностей при изменении точек маршрута
+  // Вычисляем статистику маршрута при изменении точек
   useEffect(() => {
-    const loadPOIs = async () => {
-      if (selectedPoints.length < 2) {
-        setRoutePOIs([]);
-        setRouteStats({ distance: 0, duration: 0 });
-        return;
-      }
+    if (selectedPoints.length < 2) {
+      setRouteStats({ distance: 0, duration: 0 });
+      return;
+    }
 
-      // Вычисляем статистику маршрута
-      const distance = calculateRouteDistance(selectedPoints);
-      const duration = estimateRouteTime(distance);
-      setRouteStats({ distance, duration });
+    const distance = calculateRouteDistance(selectedPoints);
+    const duration = estimateRouteTime(distance);
+    setRouteStats({ distance, duration });
+  }, [selectedPoints]);
 
-      // Загружаем достопримечательности, если включена опция
-      if (preferences.includePOIs) {
-        setIsLoadingPOIs(true);
-        try {
-          // Получаем ID рубрик из выбранных категорий
-          const rubricIds = getSelectedRubricIds(preferences.poiCategories);
-          const pois = await findPOIsAlongRoute(selectedPoints, 500, rubricIds);
-          setRoutePOIs(pois);
-        } catch (error) {
-          console.error('Error loading POIs:', error);
-        } finally {
-          setIsLoadingPOIs(false);
-        }
-      } else {
-        setRoutePOIs([]);
-      }
-    };
-
-    loadPOIs();
-  }, [selectedPoints, preferences.includePOIs, preferences.poiCategories]);
 
   const handleEpochToggle = (epoch) => {
     const epochs = preferences.epochs.includes(epoch)
