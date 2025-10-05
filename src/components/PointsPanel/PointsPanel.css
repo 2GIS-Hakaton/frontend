@@ -6,7 +6,7 @@
   width: 56px;
   height: 56px;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
   border: none;
   border-radius: 50%;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -72,7 +72,7 @@
   padding: var(--spacing-lg);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
   flex-shrink: 0;
 }
 
@@ -84,7 +84,7 @@
 
 .points-panel-close {
   background: rgba(255, 255, 255, 0.2);
-  color: white;
+  color: var(--color-background);
   border: none;
   width: 32px;
   height: 32px;
@@ -178,7 +178,7 @@
   min-width: 32px;
   height: 32px;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
   border-radius: 50%;
   font-size: 14px;
   font-weight: 700;
@@ -232,7 +232,7 @@
 
 .point-remove-btn:hover {
   background: var(--color-error);
-  color: white;
+  color: var(--color-background);
   transform: scale(1.15);
 }
 
@@ -274,7 +274,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-overlay);
     z-index: 998;
   }
 

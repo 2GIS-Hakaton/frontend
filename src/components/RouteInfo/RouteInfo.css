@@ -17,7 +17,7 @@
   justify-content: space-between;
   padding: var(--spacing-lg);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
 }
 
 .route-info-header h2 {
@@ -29,7 +29,7 @@
 .close-btn {
   background: rgba(255, 255, 255, 0.2);
   border: none;
-  color: white;
+  color: var(--color-background);
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
@@ -101,7 +101,7 @@
   width: 32px;
   height: 32px;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-background);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -143,13 +143,13 @@
 }
 
 .epoch-tag {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--color-epoch-tag-bg);
+  color: var(--color-epoch-tag-text);
 }
 
 .category-tag {
-  background: #f3e5f5;
-  color: #7b1fa2;
+  background: var(--color-category-tag-bg);
+  color: var(--color-category-tag-text);
 }
 
 @media (max-width: 768px) {
