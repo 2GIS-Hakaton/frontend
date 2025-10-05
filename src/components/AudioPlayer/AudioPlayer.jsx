@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { useAudio } from '../../hooks/useAudio';
 import { useAudioSync } from '../../hooks/useAudioSync';
-import { formatDistance } from '../../utils/formatters';
 import './AudioPlayer.css';
 
 // SVG Icons
@@ -94,13 +93,6 @@ const AudioPlayer = ({ audioUrl, route }) => {
     return route.waypoints[Math.min(waypointIndex, route.waypoints.length - 1)];
   };
 
-  const getRemainingDistance = () => {
-    if (!route?.total_distance || !duration) return 0;
-    const progress = currentTime / duration;
-    const remainingDistance = route.total_distance * (1 - progress);
-    return Math.max(0, remainingDistance);
-  };
-
   const handleDownloadAudio = () => {
     if (!audioUrl) return;
     
@@ -113,7 +105,6 @@ const AudioPlayer = ({ audioUrl, route }) => {
   };
 
   const currentWaypoint = getCurrentWaypoint();
-  const remainingDistance = getRemainingDistance();
 
   return (
     <div className="audio-player">
@@ -212,9 +203,6 @@ const AudioPlayer = ({ audioUrl, route }) => {
               <>
                 <div className="route-info">
                   <span className="route-name">{route.name}</span>
-                  <span className="route-distance">
-                    Осталось: {formatDistance(remainingDistance)}
-                  </span>
                 </div>
                 <button 
                   className="control-btn download-btn" 

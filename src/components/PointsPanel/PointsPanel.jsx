@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouteStore } from '../../store/routeStore';
 import { useMapStore } from '../../store/mapStore';
+import { optimizeRouteAdvanced } from '../../utils/routeOptimizer';
 import './PointsPanel.css';
 
 const PointsPanel = () => {
@@ -8,6 +9,7 @@ const PointsPanel = () => {
   const { markers, removeMarker, clearMarkers } = useMapStore();
   const [isOpen, setIsOpen] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState(null);
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
   const handleRemovePoint = (index) => {
     removeSelectedPoint(index);
@@ -56,6 +58,41 @@ const PointsPanel = () => {
     });
   };
 
+  const handleOptimizeRoute = () => {
+    if (selectedPoints.length < 3) {
+      alert('Для оптимизации нужно минимум 3 точки');
+      return;
+    }
+
+    setIsOptimizing(true);
+
+    // Небольшая задержка для UI feedback
+    setTimeout(() => {
+      // Оптимизируем маршрут
+      const optimizedPoints = optimizeRouteAdvanced(selectedPoints);
+      
+      // Обновляем порядок точек в store
+      useRouteStore.setState({ selectedPoints: optimizedPoints });
+      
+      // Переупорядочиваем маркеры
+      const newMarkers = optimizedPoints.map((point) => {
+        const originalIndex = selectedPoints.findIndex(
+          p => p.lat === point.lat && p.lon === point.lon
+        );
+        return markers[originalIndex];
+      });
+      
+      clearMarkers();
+      newMarkers.forEach(marker => {
+        if (marker) {
+          useMapStore.getState().addMarker(marker);
+        }
+      });
+
+      setIsOptimizing(false);
+    }, 300);
+  };
+
   if (selectedPoints.length === 0) {
     return null;
   }
@@ -82,7 +119,19 @@ const PointsPanel = () => {
         </div>
 
         <div className="points-panel-content">
-          <p className="points-panel-hint">Перетащите точки для изменения порядка</p>
+          <div className="points-panel-actions">
+            <p className="points-panel-hint">Перетащите точки для изменения порядка</p>
+            {selectedPoints.length >= 3 && (
+              <button
+                className="optimize-route-btn"
+                onClick={handleOptimizeRoute}
+                disabled={isOptimizing}
+                title="Найти оптимальный порядок точек для кратчайшего маршрута"
+              >
+                {isOptimizing ? '⏳ Оптимизация...' : '🎯 Оптимизировать'}
+              </button>
+            )}
+          </div>
           
           <div className="points-panel-list">
             {selectedPoints.map((point, index) => {
