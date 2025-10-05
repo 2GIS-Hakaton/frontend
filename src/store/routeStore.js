@@ -10,12 +10,24 @@ export const useRouteStore = create((set, get) => ({
   // Selected waypoints on map
   selectedPoints: [],
   
+  // POIs (достопримечательности) along the route
+  routePOIs: [],
+  isLoadingPOIs: false,
+  
+  // Route statistics
+  routeStats: {
+    distance: 0, // в метрах
+    duration: 0, // в минутах
+  },
+  
   // Route preferences
   preferences: {
     durationMinutes: 60,
     epochs: [],
     interests: [],
     maxWaypoints: 5,
+    includePOIs: false, // Включать ли достопримечательности
+    poiCategories: [], // Выбранные категории достопримечательностей
   },
   
   // Audio playback state
@@ -65,12 +77,27 @@ export const useRouteStore = create((set, get) => ({
     set({ audioState: { ...current, ...audioState } });
   },
   
+  setRoutePOIs: (pois) => set({ routePOIs: pois }),
+  
+  setIsLoadingPOIs: (isLoading) => set({ isLoadingPOIs: isLoading }),
+  
+  setRouteStats: (stats) => {
+    const current = get().routeStats;
+    set({ routeStats: { ...current, ...stats } });
+  },
+  
   reset: () => set({
     currentRoute: null,
     audioUrl: null,
     isGenerating: false,
     error: null,
     selectedPoints: [],
+    routePOIs: [],
+    isLoadingPOIs: false,
+    routeStats: {
+      distance: 0,
+      duration: 0,
+    },
     audioState: {
       isPlaying: false,
       currentTime: 0,

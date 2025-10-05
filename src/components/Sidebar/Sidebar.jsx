@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouteStore } from '../../store/routeStore';
 import { useMapStore } from '../../store/mapStore';
 import { generateRoute, getRouteAudioUrl, checkRouteAudioStatus } from '../../api/routes';
 import AddressSearch from '../AddressSearch/AddressSearch';
+import { findPOIsAlongRoute, calculateRouteDistance, estimateRouteTime } from '../../utils/poisSearch';
+import { formatDistance } from '../../utils/formatters';
+import { getSelectedRubricIds, getCategoriesForAPI } from '../../enums/POICategories';
 import './Sidebar.css';
 import { NARRATIVE_STYLES } from '../../enums/Narrative_styles';
 import { EPOCHS } from '../../enums/Epochs';
@@ -20,10 +23,51 @@ const Sidebar = ({ isOpen, onToggle }) => {
     setError,
     isGenerating,
     error,
+    routePOIs,
+    setRoutePOIs,
+    setIsLoadingPOIs,
+    isLoadingPOIs,
+    routeStats,
+    setRouteStats,
   } = useRouteStore();
 
   const { clearMarkers, directions } = useMapStore();
   const [narrativeStyle, setNarrativeStyle] = useState('casual');
+
+  // Загрузка достопримечательностей при изменении точек маршрута
+  useEffect(() => {
+    const loadPOIs = async () => {
+      if (selectedPoints.length < 2) {
+        setRoutePOIs([]);
+        setRouteStats({ distance: 0, duration: 0 });
+        return;
+      }
+
+      // Вычисляем статистику маршрута
+      const distance = calculateRouteDistance(selectedPoints);
+      const duration = estimateRouteTime(distance);
+      setRouteStats({ distance, duration });
+
+      // Загружаем достопримечательности, если включена опция
+      if (preferences.includePOIs) {
+        setIsLoadingPOIs(true);
+        try {
+          // Получаем ID рубрик из выбранных категорий
+          const rubricIds = getSelectedRubricIds(preferences.poiCategories);
+          const pois = await findPOIsAlongRoute(selectedPoints, 500, rubricIds);
+          setRoutePOIs(pois);
+        } catch (error) {
+          console.error('Error loading POIs:', error);
+        } finally {
+          setIsLoadingPOIs(false);
+        }
+      } else {
+        setRoutePOIs([]);
+      }
+    };
+
+    loadPOIs();
+  }, [selectedPoints, preferences.includePOIs, preferences.poiCategories]);
 
   const handleEpochToggle = (epoch) => {
     const epochs = preferences.epochs.includes(epoch)
@@ -65,16 +109,33 @@ const Sidebar = ({ isOpen, onToggle }) => {
         })
       );
 
+      // Добавляем достопримечательности, если они включены
+      const allPOIs = preferences.includePOIs 
+        ? [
+            ...customPOIs,
+            ...routePOIs.map(poi => ({
+              name: poi.name,
+              description: poi.description,
+              latitude: poi.lat,
+              longitude: poi.lon,
+              epoch: preferences.epochs[0] || 'modern',
+              category: poi.category,
+              rubric_id: poi.rubricId, // Добавляем ID рубрики для AI
+            }))
+          ]
+        : customPOIs;
+
       const routeRequest = {
         start_point: selectedPoints[0],
         duration_minutes: preferences.durationMinutes,
         epochs: preferences.epochs,
         interests: preferences.interests,
         max_waypoints: preferences.maxWaypoints,
-        custom_pois: customPOIs,
+        custom_pois: allPOIs,
+        poi_categories: preferences.includePOIs ? getCategoriesForAPI(preferences.poiCategories) : [], // Категории для AI
       };
 
-      console.log('Generating route with custom POIs:', routeRequest);
+      console.log('Generating route with POIs:', routeRequest);
       const route = await generateRoute(routeRequest);
       setCurrentRoute(route);
 
@@ -195,6 +256,37 @@ const Sidebar = ({ isOpen, onToggle }) => {
                   value={preferences.maxWaypoints}
                   onChange={(e) => setPreferences({ maxWaypoints: parseInt(e.target.value) })}
                 />
+              </div>
+
+              {/* Статистика маршрута - всегда видна */}
+              <div className="route-stats">
+                <div className="stat-item">
+                  <span className="stat-icon">📏</span>
+                  <div className="stat-info">
+                    <span className="stat-label">Расстояние</span>
+                    <span className="stat-value">
+                      {selectedPoints.length >= 2 
+                        ? formatDistance(routeStats.distance)
+                        : '—'
+                      }
+                    </span>
+                  </div>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-icon">⏱️</span>
+                  <div className="stat-info">
+                    <span className="stat-label">Время в пути</span>
+                    <span className="stat-value">
+                      {selectedPoints.length >= 2 
+                        ? (routeStats.duration < 60 
+                            ? `${routeStats.duration} мин`
+                            : `${Math.floor(routeStats.duration / 60)} ч ${routeStats.duration % 60} мин`
+                          )
+                        : '—'
+                      }
+                    </span>
+                  </div>
+                </div>
               </div>
             </section>
 
