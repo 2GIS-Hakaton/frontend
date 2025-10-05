@@ -3,9 +3,9 @@ import { useRouteStore } from '../../store/routeStore';
 import { useMapStore } from '../../store/mapStore';
 import { generateRoute, getRouteAudioUrl, checkRouteAudioStatus } from '../../api/routes';
 import AddressSearch from '../AddressSearch/AddressSearch';
-import { findPOIsAlongRoute, calculateRouteDistance, estimateRouteTime } from '../../utils/poisSearch';
+import { calculateRouteDistance, estimateRouteTime } from '../../utils/poisSearch';
 import { formatDistance } from '../../utils/formatters';
-import { getSelectedRubricIds, getCategoriesForAPI } from '../../enums/POICategories';
+import { getCategoriesForAPI } from '../../enums/POICategories';
 import './Sidebar.css';
 import { NARRATIVE_STYLES } from '../../enums/Narrative_styles';
 import { EPOCHS } from '../../enums/Epochs';
@@ -33,41 +33,23 @@ const Sidebar = ({ isOpen, onToggle }) => {
 
   const { clearMarkers, directions } = useMapStore();
   const [narrativeStyle, setNarrativeStyle] = useState('casual');
+  const [pollingTimeoutId, setPollingTimeoutId] = useState(null);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [estimatedTime, setEstimatedTime] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
-  // Загрузка достопримечательностей при изменении точек маршрута
+  // Вычисляем статистику маршрута при изменении точек
   useEffect(() => {
-    const loadPOIs = async () => {
-      if (selectedPoints.length < 2) {
-        setRoutePOIs([]);
-        setRouteStats({ distance: 0, duration: 0 });
-        return;
-      }
+    if (selectedPoints.length < 2) {
+      setRouteStats({ distance: 0, duration: 0 });
+      return;
+    }
 
-      // Вычисляем статистику маршрута
-      const distance = calculateRouteDistance(selectedPoints);
-      const duration = estimateRouteTime(distance);
-      setRouteStats({ distance, duration });
+    const distance = calculateRouteDistance(selectedPoints);
+    const duration = estimateRouteTime(distance);
+    setRouteStats({ distance, duration });
+  }, [selectedPoints]);
 
-      // Загружаем достопримечательности, если включена опция
-      if (preferences.includePOIs) {
-        setIsLoadingPOIs(true);
-        try {
-          // Получаем ID рубрик из выбранных категорий
-          const rubricIds = getSelectedRubricIds(preferences.poiCategories);
-          const pois = await findPOIsAlongRoute(selectedPoints, 500, rubricIds);
-          setRoutePOIs(pois);
-        } catch (error) {
-          console.error('Error loading POIs:', error);
-        } finally {
-          setIsLoadingPOIs(false);
-        }
-      } else {
-        setRoutePOIs([]);
-      }
-    };
-
-    loadPOIs();
-  }, [selectedPoints, preferences.includePOIs, preferences.poiCategories]);
 
   const handleEpochToggle = (epoch) => {
     const epochs = preferences.epochs.includes(epoch)
@@ -91,6 +73,27 @@ const Sidebar = ({ isOpen, onToggle }) => {
 
     setIsGenerating(true);
     setError(null);
+    setGenerationProgress(0);
+    setElapsedTime(0);
+    
+    // Оценка времени: базовое время + время на каждую точку + время на POI
+    const baseTime = 10; // 10 секунд базовое время
+    const timePerPoint = 3; // 3 секунды на точку
+    const timePerPOI = 2; // 2 секунды на достопримечательность
+    const poiCount = preferences.includePOIs ? routePOIs.length : 0;
+    const estimated = baseTime + (selectedPoints.length * timePerPoint) + (poiCount * timePerPOI);
+    setEstimatedTime(estimated);
+    
+    // Запускаем таймер прогресса
+    const startTime = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedTime(elapsed);
+      
+      // Прогресс: 90% за estimated время, последние 10% - ожидание
+      const progress = Math.min(90, (elapsed / estimated) * 90);
+      setGenerationProgress(progress);
+    }, 100);
 
     try {
       // Получаем названия мест для каждой точки через reverse geocoding
@@ -109,21 +112,8 @@ const Sidebar = ({ isOpen, onToggle }) => {
         })
       );
 
-      // Добавляем достопримечательности, если они включены
-      const allPOIs = preferences.includePOIs 
-        ? [
-            ...customPOIs,
-            ...routePOIs.map(poi => ({
-              name: poi.name,
-              description: poi.description,
-              latitude: poi.lat,
-              longitude: poi.lon,
-              epoch: preferences.epochs[0] || 'modern',
-              category: poi.category,
-              rubric_id: poi.rubricId, // Добавляем ID рубрики для AI
-            }))
-          ]
-        : customPOIs;
+      // POI теперь уже включены в selectedPoints, не нужно добавлять их отдельно
+      const allPOIs = customPOIs;
 
       const routeRequest = {
         start_point: selectedPoints[0],
@@ -138,12 +128,17 @@ const Sidebar = ({ isOpen, onToggle }) => {
       console.log('Generating route with POIs:', routeRequest);
       const route = await generateRoute(routeRequest);
       setCurrentRoute(route);
+      
+      // Прогресс 90% - маршрут создан, начинаем ожидание аудио
+      setGenerationProgress(90);
 
       // Poll for audio availability
-      pollForAudio(route.route_id);
+      pollForAudio(route.route_id, 0, progressInterval);
     } catch (err) {
+      clearInterval(progressInterval);
       setError(err.response?.data?.error || 'Ошибка при генерации маршрута');
       setIsGenerating(false);
+      setGenerationProgress(0);
     }
   };
 
@@ -182,12 +177,15 @@ const Sidebar = ({ isOpen, onToggle }) => {
     }
   };
 
-  const pollForAudio = async (routeId, attempts = 0) => {
+  const pollForAudio = async (routeId, attempts = 0, progressInterval = null) => {
     const maxAttempts = 60; // 5 minutes with 5 second intervals
 
     if (attempts >= maxAttempts) {
+      if (progressInterval) clearInterval(progressInterval);
       setError('Превышено время ожидания генерации аудио');
       setIsGenerating(false);
+      setPollingTimeoutId(null);
+      setGenerationProgress(0);
       return;
     }
 
@@ -195,19 +193,51 @@ const Sidebar = ({ isOpen, onToggle }) => {
       const status = await checkRouteAudioStatus(routeId);
 
       if (status.ready) {
-        setAudioUrl(getRouteAudioUrl(routeId));
-        setIsGenerating(false);
+        if (progressInterval) clearInterval(progressInterval);
+        setGenerationProgress(100);
+        
+        // Небольшая задержка для показа 100%
+        setTimeout(() => {
+          setAudioUrl(getRouteAudioUrl(routeId));
+          setIsGenerating(false);
+          setPollingTimeoutId(null);
+          setGenerationProgress(0);
+        }, 500);
       } else {
+        // Прогресс 90-99% во время ожидания аудио
+        const audioProgress = 90 + Math.min(9, attempts * 0.5);
+        setGenerationProgress(audioProgress);
+        
         // Wait 5 seconds and try again
-        setTimeout(() => pollForAudio(routeId, attempts + 1), 5000);
+        const timeoutId = setTimeout(() => pollForAudio(routeId, attempts + 1, progressInterval), 5000);
+        setPollingTimeoutId(timeoutId);
       }
     } catch (err) {
       console.error('Error checking audio status:', err);
-      setTimeout(() => pollForAudio(routeId, attempts + 1), 5000);
+      const timeoutId = setTimeout(() => pollForAudio(routeId, attempts + 1, progressInterval), 5000);
+      setPollingTimeoutId(timeoutId);
     }
   };
 
+  const handleCancelGeneration = () => {
+    // Отменяем polling
+    if (pollingTimeoutId) {
+      clearTimeout(pollingTimeoutId);
+      setPollingTimeoutId(null);
+    }
+    
+    // Сбрасываем состояние генерации
+    setIsGenerating(false);
+    setError('Генерация отменена');
+  };
+
   const handleClearRoute = () => {
+    // Если идет генерация, отменяем её
+    if (isGenerating) {
+      handleCancelGeneration();
+      return;
+    }
+
     clearSelectedPoints();
     clearMarkers();
     setCurrentRoute(null);
@@ -345,17 +375,35 @@ const Sidebar = ({ isOpen, onToggle }) => {
                 onClick={handleGenerateRoute}
                 disabled={isGenerating || selectedPoints.length === 0}
               >
-                {isGenerating ? 'Генерация...' : 'Построить маршрут'}
+                {isGenerating ? '⏳ Генерация...' : 'Построить маршрут'}
               </button>
 
               <button
-                className="btn btn-secondary"
+                className={`btn ${isGenerating ? 'btn-danger' : 'btn-secondary'}`}
                 onClick={handleClearRoute}
-                disabled={isGenerating}
               >
-                Очистить
+                {isGenerating ? '⏹️ Отменить генерацию' : 'Очистить'}
               </button>
             </div>
+
+            {isGenerating && (
+              <div className="generation-progress">
+                <div className="progress-header">
+                  <span className="progress-label">Генерация маршрута...</span>
+                  <span className="progress-time">
+                    {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')} / {Math.floor(estimatedTime / 60)}:{(estimatedTime % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+                <div className="progress-bar-container">
+                  <div 
+                    className="progress-bar-fill" 
+                    style={{ width: `${generationProgress}%` }}
+                  >
+                    <span className="progress-percentage">{Math.round(generationProgress)}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="sidebar-info">
               <p className="info-text">
