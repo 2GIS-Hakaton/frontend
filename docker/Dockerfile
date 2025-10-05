@@ -1,8 +1,10 @@
-
-FROM node:24
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
+FROM node:24 AS builder
+WORKDIR /build
 COPY . .
-EXPOSE 3000
-CMD ["npm", "run", "dev"]
+RUN npm install && npm run build
+
+FROM busybox:latest AS runner
+WORKDIR /app
+COPY --from=builder /build/dist .
+EXPOSE 8080
+CMD ["busybox", "httpd", "-f", "-v", "-p", "8080"]

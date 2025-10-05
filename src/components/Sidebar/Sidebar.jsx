@@ -88,7 +88,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
   // Получить адрес по координатам через 2GIS API
   const getAddressFromCoordinates = async (lat, lon) => {
     try {
-      const apiKey = import.meta.env.VITE_2GIS_MAP_API_KEY;
+      const apiKey = '8561492e-8262-40c5-85e7-a58c1c705168';
       const response = await fetch(
         `https://catalog.api.2gis.com/3.0/items/geocode?lat=${lat}&lon=${lon}&fields=items.point,items.address&key=${apiKey}`
       );

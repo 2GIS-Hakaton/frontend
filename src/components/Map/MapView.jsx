@@ -12,8 +12,8 @@ const MapView = () => {
   useEffect(() => {
     if (!mapContainerRef.current || map) return;
 
-    const mapglApiKey = import.meta.env.VITE_2GIS_MAP_API_KEY;
-    const directionsApiKey = import.meta.env.VITE_2GIS_DIRECTIONS_API_KEY;
+    const mapglApiKey = '8561492e-8262-40c5-85e7-a58c1c705168';
+    const directionsApiKey = '8561492e-8262-40c5-85e7-a58c1c705168';
 
     if (!mapglApiKey) {
       console.error('2GIS MapGL API key is not set');
